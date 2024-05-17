@@ -1,149 +1,225 @@
-import re
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QLabel
+from PyQt5.QtGui import QFont
+import ply.lex as lex
+import ply.yacc as yacc
 
-class Tokenizer:
-    def __init__(self, input_string):
-        self.input_string = input_string
-        self.tokens = []
-        self.pos = 0
-        self.tokenize()
+class ParserGUI(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.setup_lexer()
+        self.setup_parser()
 
-    def tokenize(self):
-        token_specification = [
-            ('NUMBER', r'\d+(\.\d*)?'),  # Integer or decimal number
-            ('ASSIGN', r'='),            # Assignment operator
-            ('END', r';'),               # Statement terminator
-            ('ID', r'[A-Za-z]+'),        # Identifiers
-            ('OP', r'[\+\-\*/]'),        # Arithmetic operators
-            ('LPAREN', r'\('),           # Left Parenthesis
-            ('RPAREN', r'\)'),           # Right Parenthesis
-            ('SKIP', r'[ \t]+'),         # Skip over spaces and tabs
-            ('M_COMMENT', r'/\*.*?\*/'), # Multi-line comments
-            ('S_COMMENT', r'//.*'),      # Single-line comments
-        ]
-        tok_regex = '|'.join('(?P<%s>%s)' % pair for pair in token_specification)
-        get_token = re.compile(tok_regex, re.DOTALL).finditer
+    def initUI(self):
+        self.setWindowTitle('Code Parser')
+        self.setGeometry(100, 100, 800, 600)
 
-        for mo in get_token(self.input_string):
-            kind = mo.lastgroup
-            value = mo.group(kind)
-            if kind in ['SKIP', 'S_COMMENT', 'M_COMMENT']:
-                continue
-            self.tokens.append((kind, value))
+        layout = QVBoxLayout()
+        
+        # Text box for code input
+        self.code_input = QTextEdit(self)
+        self.code_input.setFont(QFont('Courier', 12))
+        layout.addWidget(QLabel('Input Code:'))
+        layout.addWidget(self.code_input)
+        
+        # Buttons layout
+        buttons_layout = QHBoxLayout()
+        
+        # Tokenize button
+        self.tokenize_button = QPushButton('Tokenize', self)
+        self.tokenize_button.clicked.connect(self.tokenize_code)
+        buttons_layout.addWidget(self.tokenize_button)
+        
+        # Check Syntax button
+        self.check_syntax_button = QPushButton('Check Syntax', self)
+        self.check_syntax_button.clicked.connect(self.check_syntax)
+        buttons_layout.addWidget(self.check_syntax_button)
+        
+        # Parse Tree button
+        self.parse_tree_button = QPushButton('Show Parse Tree', self)
+        self.parse_tree_button.clicked.connect(self.show_parse_tree)
+        buttons_layout.addWidget(self.parse_tree_button)
+        
+        # Execute button
+        self.execute_button = QPushButton('Execute', self)
+        self.execute_button.clicked.connect(self.execute_code)
+        buttons_layout.addWidget(self.execute_button)
+        
+        layout.addLayout(buttons_layout)
+        
+        # Error Logger
+        self.error_logger = QTextEdit(self)
+        self.error_logger.setFont(QFont('Courier', 12))
+        self.error_logger.setReadOnly(True)
+        self.error_logger.setStyleSheet('color: red;')
+        layout.addWidget(QLabel('Error Logger:'))
+        layout.addWidget(self.error_logger)
+        
+        # Result Display
+        self.result_display = QTextEdit(self)
+        self.result_display.setFont(QFont('Courier', 12))
+        self.result_display.setReadOnly(True)
+        layout.addWidget(QLabel('Result:'))
+        layout.addWidget(self.result_display)
+        
+        self.setLayout(layout)
 
-    def next_token(self):
-        if self.pos < len(self.tokens):
-            token = self.tokens[self.pos]
-            self.pos += 1
-            return token
-        return None
+    def setup_lexer(self):
+        # Define tokens
+        tokens = (
+            'NUMBER', 'PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'LPAREN', 'RPAREN'
+        )
 
-    def peek(self):
-        if self.pos < len(self.tokens):
-            return self.tokens[self.pos]
-        return None
-    
-    def get_tokens(self):
-        return self.tokens
+        # Token rules
+        t_PLUS = r'\+'
+        t_MINUS = r'-'
+        t_TIMES = r'\*'
+        t_DIVIDE = r'/'
+        t_LPAREN = r'\('
+        t_RPAREN = r'\)'
 
-class Parser:
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
-        self.tokens = tokenizer.get_tokens()
-        self.pos = 0
-    
-    def parse(self):
-        if not self.tokenizer.tokens:
-            return None
-        return self.expression()
+        def t_NUMBER(t):
+            r'\d+'
+            t.value = int(t.value)
+            return t
 
-    def expression(self):
-        tokens = []
-        token = self.tokenizer.next_token()
-        while token and token[0] != 'END':
-            tokens.append(token)
-            token = self.tokenizer.next_token()
-        return tokens
+        t_ignore = ' \t'
 
-    # def add_sub(self):
-    #     result = self.mul_div()
-    #     while self.pos < len(self.tokens):
-    #         token = self.tokens[self.pos]
-    #         if token[0] in ('ADD', 'SUB'):
-    #             self.pos += 1
-    #             if token[0] == 'ADD':
-    #                 result += self.mul_div()
-    #             elif token[0] == 'SUB':
-    #                 result -= self.mul_div()
-    #         else:
-    #             break
-    #     return result
-    
-    # def mul_div(self):
-    #     result = self.factor()
-    #     while self.pos < len(self.tokens):
-    #         token = self.tokens[self.pos]
-    #         if token[0] in ('MUL', 'DIV'):
-    #             self.pos += 1
-    #             if token[0] == 'MUL':
-    #                 result *= self.factor()
-    #             elif token[0] == 'DIV':
-    #                 divisor = self.factor()
-    #                 if divisor != 0:
-    #                     result /= divisor
-    #                 else:
-    #                     raise ValueError("Division by zero")
-    #         else:
-    #             break
-    #     return result
+        def t_newline(t):
+            r'\n+'
+            t.lexer.lineno += len(t.value)
 
-    # def factor(self):
-    #     token = self.tokens[self.pos]
-    #     if token[0] == 'NUMBER':
-    #         self.pos += 1
-    #         return int(token[1])
-    #     elif token[0] == 'LPAREN':
-    #         self.pos += 1
-    #         result = self.expression()
-    #         if self.tokens[self.pos][0] == 'RPAREN':
-    #             self.pos += 1
-    #             return result
-    #         else:
-    #             raise Exception("Unmatched parenthesis")
-    #     else:
-    #         raise Exception("Invalid syntax")
+        def t_error(t):
+            self.log_error(f"Illegal character '{t.value[0]}'")
+            t.lexer.skip(1)
 
-def accept_input():
-    user_input = input("Enter an expression: ")
-    return user_input
+        self.lexer = lex.lex()
+        self.lexer.tokens = tokens
+        self.lexer.t_PLUS = t_PLUS
+        self.lexer.t_MINUS = t_MINUS
+        self.lexer.t_TIMES = t_TIMES
+        self.lexer.t_DIVIDE = t_DIVIDE
+        self.lexer.t_LPAREN = t_LPAREN
+        self.lexer.t_RPAREN = t_RPAREN
+        self.lexer.t_NUMBER = t_NUMBER
+        self.lexer.t_ignore = t_ignore
+        self.lexer.t_newline = t_newline
+        self.lexer.t_error = t_error
 
-def main():
-    print("Enter your expression (type 'END;' to exit):")
-    while True:
+    def setup_parser(self):
+        tokens = self.lexer.tokens
+
+        def p_expression_plus(p):
+            'expression : expression PLUS term'
+            p[0] = p[1] + p[3]
+
+        def p_expression_minus(p):
+            'expression : expression MINUS term'
+            p[0] = p[1] - p[3]
+
+        def p_expression_term(p):
+            'expression : term'
+            p[0] = p[1]
+
+        def p_term_times(p):
+            'term : term TIMES factor'
+            p[0] = p[1] * p[3]
+
+        def p_term_divide(p):
+            'term : term DIVIDE factor'
+            p[0] = p[1] / p[3]
+
+        def p_term_factor(p):
+            'term : factor'
+            p[0] = p[1]
+
+        def p_factor_number(p):
+            'factor : NUMBER'
+            p[0] = p[1]
+
+        def p_factor_expr(p):
+            'factor : LPAREN expression RPAREN'
+            p[0] = p[2]
+
+        def p_error(p):
+            if p:
+                self.log_error(f"Syntax error at '{p.value}'")
+            else:
+                self.log_error("Syntax error at EOF")
+
+        self.parser = yacc.yacc()
+
+        self.parser.p_expression_plus = p_expression_plus
+        self.parser.p_expression_minus = p_expression_minus
+        self.parser.p_expression_term = p_expression_term
+        self.parser.p_term_times = p_term_times
+        self.parser.p_term_divide = p_term_divide
+        self.parser.p_term_factor = p_term_factor
+        self.parser.p_factor_number = p_factor_number
+        self.parser.p_factor_expr = p_factor_expr
+        self.parser.p_error = p_error
+
+    def tokenize_code(self):
+        code = self.code_input.toPlainText()
+        self.clear_error_log()
+        self.clear_result_display()
         try:
-            input_string = input("> ")
-            if input_string.strip() == 'END;':
-                break
-            tokenizer = Tokenizer(input_string)
-            print("Tokenizer Output:", tokenizer.tokens)
-            parser = Parser(tokenizer)
-            parse_tree = parser.parse()
-            print("Parse Tree:", parse_tree)
+            self.lexer.input(code)
+            tokens = []
+            while True:
+                tok = self.lexer.token()
+                if not tok:
+                    break
+                tokens.append(str(tok))
+            self.log_message("Tokens:\n" + "\n".join(tokens))
         except Exception as e:
-            print("Error:", str(e))
+            self.log_error(str(e))
 
-if __name__ == "__main__":
-    main()
+    def check_syntax(self):
+        code = self.code_input.toPlainText()
+        self.clear_error_log()
+        try:
+            self.lexer.input(code)
+            for token in self.lexer:
+                pass
+            self.log_message("No syntax errors found.")
+        except Exception as e:
+            self.log_error(str(e))
 
-# def main():
-#     user_input = accept_input()
-#     tokenizer = Tokenizer()
-#     tokenizer.tokenize_input(user_input)
-#     parser = Parser(tokenizer)
-#     try:
-#         result = parser.expression()
-#         print("Result:", result)
-#     except Exception as e:
-#         print("Error:", str(e))
+    def execute_code(self):
+        code = self.code_input.toPlainText()
+        self.clear_error_log()
+        self.clear_result_display()
+        try:
+            result = self.parser.parse(code, lexer=self.lexer)
+            self.log_message(f"Result: {result}")
+        except Exception as e:
+            self.log_error(str(e))
 
-# if __name__ == "__main__":
-#     main()
+    def show_parse_tree(self):
+        code = self.code_input.toPlainText()
+        self.clear_error_log()
+        try:
+            result = self.parser.parse(code, lexer=self.lexer)
+            self.log_message(f"Parse tree:\n{result}")
+        except Exception as e:
+            self.log_error(str(e))
+
+    def log_error(self, message):
+        self.error_logger.append(message + '\n')
+
+    def log_message(self, message):
+        self.result_display.append(message + '\n')
+
+    def clear_error_log(self):
+        self.error_logger.clear()
+
+    def clear_result_display(self):
+        self.result_display.clear()
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    gui = ParserGUI()
+    gui.show()
+    sys.exit(app.exec_())
